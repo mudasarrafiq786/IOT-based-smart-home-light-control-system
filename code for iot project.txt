@@ -1,0 +1,96 @@
+// IoT-based Smart Home Light Control System Code
+
+#include <WiFi.h>
+#include <BlynkSimpleEsp32.h>
+
+// Blynk Authentication Token
+char auth[] = "Your_Blynk_Auth_Token";
+// WiFi Credentials
+char ssid[] = "Your_WiFi_SSID";
+char pass[] = "Your_WiFi_Password";
+
+// Pin Definitions
+#define LDR_PIN 34 // Analog pin for LDR sensor
+#define PIR_PIN 26 // Digital pin for PIR sensor
+#define RELAY_PIN 25 // Digital pin for Relay
+
+// Thresholds
+const int LDR_THRESHOLD = 500; // Adjust based on ambient light
+const unsigned long INACTIVITY_TIMEOUT = 300000; // 5 minutes in milliseconds
+
+// Variables
+bool lightState = false;
+unsigned long lastMotionTime = 0;
+
+void setup() {
+  // Initialize serial monitor
+  Serial.begin(115200);
+
+  // Initialize pin modes
+  pinMode(LDR_PIN, INPUT);
+  pinMode(PIR_PIN, INPUT);
+  pinMode(RELAY_PIN, OUTPUT);
+  digitalWrite(RELAY_PIN, LOW); // Ensure the relay starts off
+
+  // Connect to WiFi and Blynk
+  WiFi.begin(ssid, pass);
+  Blynk.begin(auth, ssid, pass);
+
+  Serial.println("System Initialized");
+}
+
+void loop() {
+  Blynk.run();
+  automaticControl();
+}
+
+void automaticControl() {
+  int ldrValue = analogRead(LDR_PIN);
+  int pirValue = digitalRead(PIR_PIN);
+
+  // Log sensor readings (for debugging)
+  Serial.print("LDR Value: ");
+  Serial.println(ldrValue);
+  Serial.print("PIR Value: ");
+  Serial.println(pirValue);
+
+  // Check LDR sensor for low light condition
+  if (ldrValue < LDR_THRESHOLD) {
+    if (pirValue == HIGH) { // Motion detected
+      turnLightOn();
+      lastMotionTime = millis();
+    } else if (millis() - lastMotionTime >= INACTIVITY_TIMEOUT) {
+      turnLightOff();
+    }
+  } else {
+    turnLightOff();
+  }
+}
+
+void turnLightOn() {
+  if (!lightState) {
+    lightState = true;
+    digitalWrite(RELAY_PIN, HIGH);
+    Blynk.virtualWrite(V1, 1); // Update app
+    Serial.println("Light ON");
+  }
+}
+
+void turnLightOff() {
+  if (lightState) {
+    lightState = false;
+    digitalWrite(RELAY_PIN, LOW);
+    Blynk.virtualWrite(V1, 0); // Update app
+    Serial.println("Light OFF");
+  }
+}
+
+// Blynk Virtual Pin V1 - Manual Light Control
+BLYNK_WRITE(V1) {
+  int pinValue = param.asInt();
+  if (pinValue == 1) {
+    turnLightOn();
+  } else {
+    turnLightOff();
+  }
+}
